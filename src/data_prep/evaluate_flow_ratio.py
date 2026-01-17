@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import argparse
 import sys
 from pathlib import Path
+import seaborn as sns
 
 # === 路径设置 ===
 current_file = Path(__file__).resolve()
@@ -324,89 +325,254 @@ def analyze_correlation(df):
     
     return ckpt_corr
 
+# 定义时段映射函数
+def map_hour_to_period(h):
+    if 0 <= h <= 6:
+        return '夜间'      # 0:00-6:00 (含6点)
+    elif 7 <= h <= 8:
+        return '早高峰'    # 7:00-9:00 (不含9点)
+    elif 9 <= h <= 10:
+        return '上午平峰'  # 9:00-11:00
+    elif 11 <= h <= 13:
+        return '午间'      # 11:00-14:00
+    elif 14 <= h <= 16:
+        return '下午平峰'  # 14:00-17:00
+    elif 17 <= h <= 18:
+        return '晚高峰'    # 17:00-19:00
+    elif 19 <= h <= 23:
+        return '晚间'      # 19:00-24:00
+    else:
+        return '其他'
+
+
+# def plot_analysis(df, ckpt_stats, output_path):
+#     """生成可视化图表"""
+#     print("\n生成可视化图表...")
+#
+#     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+#     fig.suptitle('卡口流量与浮动车流量比值分析', fontsize=14, fontweight='bold')
+#
+#     # 1. 比值分布直方图
+#     ax1 = axes[0, 0]
+#     ratio_clipped = df['ratio'].clip(upper=50)  # 截断极端值便于展示
+#     ax1.hist(ratio_clipped, bins=50, edgecolor='black', alpha=0.7)
+#     ax1.axvline(df['ratio'].median(), color='red', linestyle='--', label=f'中位数: {df["ratio"].median():.2f}')
+#     ax1.set_xlabel('比值 (卡口/浮动车)')
+#     ax1.set_ylabel('频次')
+#     ax1.set_title('比值分布 (截断至50)')
+#     ax1.legend()
+#
+#     # 2. 渗透率分布
+#     ax2 = axes[0, 1]
+#     penetration_pct = df['penetration'] * 100
+#     ax2.hist(penetration_pct, bins=50, edgecolor='black', alpha=0.7, color='green')
+#     ax2.axvline(penetration_pct.median(), color='red', linestyle='--', label=f'中位数: {penetration_pct.median():.1f}%')
+#     ax2.set_xlabel('渗透率 (%)')
+#     ax2.set_ylabel('频次')
+#     ax2.set_title('浮动车渗透率分布')
+#     ax2.legend()
+#
+#     # 3. 按小时的比值变化
+#     ax3 = axes[0, 2]
+#     hourly_stats = df.groupby('hour')['ratio'].agg(['mean', 'median']).reset_index()
+#     ax3.plot(hourly_stats['hour'], hourly_stats['mean'], 'o-', label='均值', markersize=4)
+#     ax3.plot(hourly_stats['hour'], hourly_stats['median'], 's--', label='中位数', markersize=4)
+#     ax3.set_xlabel('小时')
+#     ax3.set_ylabel('比值')
+#     ax3.set_title('按小时的比值变化')
+#     ax3.set_xticks(range(0, 24, 2))
+#     ax3.legend()
+#     ax3.grid(True, alpha=0.3)
+#
+#     # 4. 各卡口比值均值分布
+#     ax4 = axes[1, 0]
+#     ratio_mean_clipped = ckpt_stats['比值均值'].clip(upper=50)
+#     ax4.hist(ratio_mean_clipped, bins=30, edgecolor='black', alpha=0.7, color='orange')
+#     ax4.axvline(ckpt_stats['比值均值'].median(), color='red', linestyle='--',
+#                 label=f'中位数: {ckpt_stats["比值均值"].median():.2f}')
+#     ax4.set_xlabel('卡口比值均值')
+#     ax4.set_ylabel('卡口数')
+#     ax4.set_title('各卡口比值均值分布')
+#     ax4.legend()
+#
+#     # 5. 各卡口变异系数分布
+#     ax5 = axes[1, 1]
+#     cv_clipped = ckpt_stats['变异系数'].clip(upper=2)
+#     ax5.hist(cv_clipped, bins=30, edgecolor='black', alpha=0.7, color='purple')
+#     ax5.axvline(0.3, color='green', linestyle='--', label='稳定阈值(0.3)')
+#     ax5.axvline(0.5, color='red', linestyle='--', label='不稳定阈值(0.5)')
+#     ax5.set_xlabel('变异系数')
+#     ax5.set_ylabel('卡口数')
+#     ax5.set_title('各卡口比值变异系数分布')
+#     ax5.legend()
+#
+#     # 6. 卡口流量 vs 浮动车流量散点图
+#     ax6 = axes[1, 2]
+#     sample = df.sample(min(5000, len(df)))  # 采样避免过密
+#     ax6.scatter(sample['fcd_flow'], sample['flow_std'], alpha=0.3, s=5)
+#     # 添加对角线参考
+#     max_val = max(sample['fcd_flow'].max(), sample['flow_std'].max())
+#     ax6.plot([0, max_val], [0, max_val], 'r--', label='1:1线')
+#     ax6.plot([0, max_val], [0, max_val*5], 'g--', alpha=0.5, label='5:1线')
+#     ax6.plot([0, max_val], [0, max_val*10], 'b--', alpha=0.5, label='10:1线')
+#     ax6.set_xlabel('浮动车流量')
+#     ax6.set_ylabel('卡口流量')
+#     ax6.set_title('卡口流量 vs 浮动车流量')
+#     ax6.legend()
+#     ax6.grid(True, alpha=0.3)
+#
+#     plt.tight_layout()
+#     plt.savefig(output_path, dpi=150, bbox_inches='tight')
+#     print(f"✅ 图表已保存: {output_path.name}")
+#
+#     plt.close()
 
 def plot_analysis(df, ckpt_stats, output_path):
-    """生成可视化图表"""
+    """
+    生成可视化图表：每个分析维度生成单独的图片文件，并同时输出PNG和PDF。
+
+    Args:
+        df: 包含流量数据的DataFrame
+        ckpt_stats: 包含卡口统计数据的DataFrame
+        output_path: 基础输出路径 (例如 'results/analysis.png')，文件名将作为前缀使用
+    """
     print("\n生成可视化图表...")
-    
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-    fig.suptitle('卡口流量与浮动车流量比值分析', fontsize=14, fontweight='bold')
-    
-    # 1. 比值分布直方图
-    ax1 = axes[0, 0]
-    ratio_clipped = df['ratio'].clip(upper=50)  # 截断极端值便于展示
-    ax1.hist(ratio_clipped, bins=50, edgecolor='black', alpha=0.7)
-    ax1.axvline(df['ratio'].median(), color='red', linestyle='--', label=f'中位数: {df["ratio"].median():.2f}')
-    ax1.set_xlabel('比值 (卡口/浮动车)')
-    ax1.set_ylabel('频次')
-    ax1.set_title('比值分布 (截断至50)')
-    ax1.legend()
-    
-    # 2. 渗透率分布
-    ax2 = axes[0, 1]
+
+    # 处理路径：提取目录和基础文件名（不含扩展名）
+    output_path = Path(output_path)
+    base_dir = output_path.parent
+    base_stem = output_path.stem  # 例如 'analysis'
+
+    # 确保输出目录存在
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    # 定义通用保存函数
+    def save_current_plot(suffix):
+        # 构建文件名
+        png_name = f"{base_stem}_{suffix}.png"
+        pdf_name = f"{base_stem}_{suffix}.pdf"
+
+        # 保存 PNG
+        plt.savefig(base_dir / png_name, dpi=150, bbox_inches='tight')
+        # 保存 PDF
+        plt.savefig(base_dir / pdf_name, bbox_inches='tight')
+
+        print(f"  - 已保存: {png_name} & {pdf_name}")
+        plt.close()  # 关闭当前图表释放内存
+
+    # 设置通用画布大小
+    figsize = (8, 6)
+
+    # # --- 1. 比值分布直方图 ---
+    # plt.figure(figsize=figsize)
+    # ratio_clipped = df['ratio'].clip(upper=50)
+    # plt.hist(ratio_clipped, bins=50, edgecolor='black', alpha=0.7)
+    # plt.axvline(df['ratio'].median(), color='red', linestyle='--', label=f'中位数: {df["ratio"].median():.2f}')
+    # plt.xlabel('比值 (卡口/浮动车)')
+    # plt.ylabel('频次')
+    # plt.title('比值分布 (截断至50)')
+    # plt.legend()
+    # plt.grid(True, alpha=0.3)
+    # save_current_plot("01_ratio_distribution")
+
+    # --- 1. 比值分布箱线图 (分时段展示) ---
+    # 2. 生成 time_period 列
+    df['time_period'] = df['hour'].apply(map_hour_to_period)
+
+    # 4. 定义绘图顺序
+    order_list = ['夜间', '早高峰', '上午平峰', '午间', '下午平峰', '晚高峰', '晚间']
+
+    # 5. 绘制箱线图
+    # showfliers=False: 隐藏极端异常值点，让箱体更清晰
+    sns.boxplot(x='time_period', y='ratio', data=df,
+                order=order_list,
+                palette='viridis',
+                width=0.5,
+                showfliers=False)
+
+    # 6. 添加辅助元素
+    global_median = df['ratio'].median()
+    plt.axhline(global_median, color='red', linestyle='--', alpha=0.6, label=f'全局中位数: {global_median:.2f}')
+
+    plt.xlabel('时段类型', fontsize=12)
+    plt.ylabel('流量比值 (卡口/浮动车)', fontsize=12)
+    plt.title('不同时段下的流量比值分布特性', fontsize=14)
+    plt.legend(loc='upper right')
+    plt.grid(True, axis='y', linestyle='--', alpha=0.3)
+
+    # 7. 保存图片
+    save_current_plot("01_ratio_boxplot_by_period") # 如果你有这个函数就用这个
+
+    # --- 2. 渗透率分布 ---
+    plt.figure(figsize=figsize)
     penetration_pct = df['penetration'] * 100
-    ax2.hist(penetration_pct, bins=50, edgecolor='black', alpha=0.7, color='green')
-    ax2.axvline(penetration_pct.median(), color='red', linestyle='--', label=f'中位数: {penetration_pct.median():.1f}%')
-    ax2.set_xlabel('渗透率 (%)')
-    ax2.set_ylabel('频次')
-    ax2.set_title('浮动车渗透率分布')
-    ax2.legend()
-    
-    # 3. 按小时的比值变化
-    ax3 = axes[0, 2]
+    plt.hist(penetration_pct, bins=50, edgecolor='black', alpha=0.7, color='green')
+    plt.axvline(penetration_pct.median(), color='red', linestyle='--', label=f'中位数: {penetration_pct.median():.1f}%')
+    plt.xlabel('渗透率 (%)')
+    plt.ylabel('频次')
+    plt.title('浮动车渗透率分布')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    save_current_plot("02_penetration_distribution")
+
+    # --- 3. 按小时的比值变化 ---
+    plt.figure(figsize=figsize)
     hourly_stats = df.groupby('hour')['ratio'].agg(['mean', 'median']).reset_index()
-    ax3.plot(hourly_stats['hour'], hourly_stats['mean'], 'o-', label='均值', markersize=4)
-    ax3.plot(hourly_stats['hour'], hourly_stats['median'], 's--', label='中位数', markersize=4)
-    ax3.set_xlabel('小时')
-    ax3.set_ylabel('比值')
-    ax3.set_title('按小时的比值变化')
-    ax3.set_xticks(range(0, 24, 2))
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
-    
-    # 4. 各卡口比值均值分布
-    ax4 = axes[1, 0]
+    plt.plot(hourly_stats['hour'], hourly_stats['mean'], 'o-', label='均值', markersize=6)
+    plt.plot(hourly_stats['hour'], hourly_stats['median'], 's--', label='中位数', markersize=6)
+    plt.xlabel('小时')
+    plt.ylabel('比值')
+    plt.title('按小时的比值变化趋势')
+    plt.xticks(range(0, 24, 2))
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    save_current_plot("03_hourly_stats")
+
+    # --- 4. 各卡口比值均值分布 ---
+    plt.figure(figsize=figsize)
     ratio_mean_clipped = ckpt_stats['比值均值'].clip(upper=50)
-    ax4.hist(ratio_mean_clipped, bins=30, edgecolor='black', alpha=0.7, color='orange')
-    ax4.axvline(ckpt_stats['比值均值'].median(), color='red', linestyle='--', 
+    plt.hist(ratio_mean_clipped, bins=30, edgecolor='black', alpha=0.7, color='orange')
+    plt.axvline(ckpt_stats['比值均值'].median(), color='red', linestyle='--',
                 label=f'中位数: {ckpt_stats["比值均值"].median():.2f}')
-    ax4.set_xlabel('卡口比值均值')
-    ax4.set_ylabel('卡口数')
-    ax4.set_title('各卡口比值均值分布')
-    ax4.legend()
-    
-    # 5. 各卡口变异系数分布
-    ax5 = axes[1, 1]
+    plt.xlabel('卡口比值均值')
+    plt.ylabel('卡口数')
+    plt.title('各卡口比值均值分布')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    save_current_plot("04_ckpt_mean_distribution")
+
+    # --- 5. 各卡口变异系数分布 ---
+    plt.figure(figsize=figsize)
     cv_clipped = ckpt_stats['变异系数'].clip(upper=2)
-    ax5.hist(cv_clipped, bins=30, edgecolor='black', alpha=0.7, color='purple')
-    ax5.axvline(0.3, color='green', linestyle='--', label='稳定阈值(0.3)')
-    ax5.axvline(0.5, color='red', linestyle='--', label='不稳定阈值(0.5)')
-    ax5.set_xlabel('变异系数')
-    ax5.set_ylabel('卡口数')
-    ax5.set_title('各卡口比值变异系数分布')
-    ax5.legend()
-    
-    # 6. 卡口流量 vs 浮动车流量散点图
-    ax6 = axes[1, 2]
+    plt.hist(cv_clipped, bins=30, edgecolor='black', alpha=0.7, color='purple')
+    plt.axvline(0.3, color='green', linestyle='--', label='稳定阈值(0.3)')
+    plt.axvline(0.5, color='red', linestyle='--', label='不稳定阈值(0.5)')
+    plt.xlabel('变异系数 (CV)')
+    plt.ylabel('卡口数')
+    plt.title('各卡口比值稳定性(变异系数)分布')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    save_current_plot("05_ckpt_cv_distribution")
+
+    # --- 6. 卡口流量 vs 浮动车流量散点图 ---
+    plt.figure(figsize=figsize)
     sample = df.sample(min(5000, len(df)))  # 采样避免过密
-    ax6.scatter(sample['fcd_flow'], sample['flow_std'], alpha=0.3, s=5)
+    plt.scatter(sample['fcd_flow'], sample['flow_std'], alpha=0.3, s=10)
+
     # 添加对角线参考
     max_val = max(sample['fcd_flow'].max(), sample['flow_std'].max())
-    ax6.plot([0, max_val], [0, max_val], 'r--', label='1:1线')
-    ax6.plot([0, max_val], [0, max_val*5], 'g--', alpha=0.5, label='5:1线')
-    ax6.plot([0, max_val], [0, max_val*10], 'b--', alpha=0.5, label='10:1线')
-    ax6.set_xlabel('浮动车流量')
-    ax6.set_ylabel('卡口流量')
-    ax6.set_title('卡口流量 vs 浮动车流量')
-    ax6.legend()
-    ax6.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    print(f"✅ 图表已保存: {output_path.name}")
-    
-    plt.close()
+    plt.plot([0, max_val], [0, max_val], 'r--', label='1:1 线')
+    plt.plot([0, max_val], [0, max_val * 5], 'g--', alpha=0.5, label='5:1 线')
+    plt.plot([0, max_val], [0, max_val * 10], 'b--', alpha=0.5, label='10:1 线')
 
+    plt.xlabel('浮动车流量')
+    plt.ylabel('卡口流量')
+    plt.title('卡口流量 vs 浮动车流量相关性')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    save_current_plot("06_flow_correlation")
+
+    print(f"✅ 所有图表生成完毕，保存在: {base_dir}")
 
 def run(input_file=None):
     """执行完整分析"""

@@ -3,3 +3,7 @@
 *.csv
 .idea/
 *.txt
+*.log
+*.pdf
+*.pkl
+*.pt

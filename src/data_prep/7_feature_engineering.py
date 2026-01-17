@@ -55,7 +55,7 @@ from utils.path_manager import pm
 # === 配置 ===
 CONFIG = {
     'input_file': 'final_training_data.csv',
-    'output_file': 'training_data_with_features.csv',
+    'output_file': 'training_data_with_features_new.csv',
     'output_report': 'report_feature_engineering.txt',
     
     # 道路类型映射
@@ -266,9 +266,15 @@ def add_physical_features(df):
     # 3. 密度代理
     # 交通密度 K = N / L ≈ fcd_flow / (3600 * L)
     # 或者 K = Q / v，这里用 fcd_flow / (length * speed) 作为代理
+    # df['density_proxy'] = df.apply(
+    #     lambda r: r['fcd_flow'] / (r['length'] * r['fcd_speed'])
+    #               if (r['length'] > 0 and pd.notna(r['fcd_speed']) and r['fcd_speed'] > 0) else 0,
+    #     axis=1
+    # )
+    # 修改后：真正的密度 K (Veh/km)
     df['density_proxy'] = df.apply(
-        lambda r: r['fcd_flow'] / (r['length'] * r['fcd_speed']) 
-                  if (r['length'] > 0 and pd.notna(r['fcd_speed']) and r['fcd_speed'] > 0) else 0,
+        lambda r: r['fcd_flow'] / (3600 * r['length'])
+        if r['length'] > 0 else 0,
         axis=1
     )
     
